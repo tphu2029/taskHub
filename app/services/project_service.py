@@ -123,7 +123,6 @@ class ProjectService:
     async def archive_project(db: AsyncSession, current_user: User, project_id: uuid.UUID) -> Project:
         project = await ProjectService.get_project(db, current_user, project_id)
 
-        # Check membership role
         mem_stmt = select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == project.workspace_id,
             WorkspaceMember.user_id == current_user.id
