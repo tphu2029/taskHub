@@ -14,8 +14,18 @@ from app.schemas.workspace import (
     WorkspaceUpdate,
 )
 from app.services.workspace_service import WorkspaceService
+from app.schemas.project import ProjectCreate, ProjectResponse
+from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"])
+
+
+@router.get("/", response_model=list[WorkspaceResponse])
+async def list_my_workspaces(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await WorkspaceService.list_my_workspaces(db, current_user)
 
 
 @router.post("/", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
@@ -34,6 +44,25 @@ async def get_workspace(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     return await WorkspaceService.get_workspace(db, current_user, workspace_id)
+
+
+@router.put("/{workspace_id}", response_model=WorkspaceResponse)
+async def update_workspace(
+    workspace_id: uuid.UUID,
+    ws_in: WorkspaceUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await WorkspaceService.update_workspace(db, current_user, workspace_id, ws_in)
+
+
+@router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workspace(
+    workspace_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await WorkspaceService.delete_workspace(db, current_user, workspace_id)
 
 
 @router.post("/{workspace_id}/members", response_model=WorkspaceMemberResponse)
@@ -56,8 +85,16 @@ async def remove_workspace_member(
     return await WorkspaceService.remove_member(db, current_user, workspace_id, user_id)
 
 
-from app.schemas.project import ProjectCreate, ProjectResponse
-from app.services.project_service import ProjectService
+# --- Workspace Projects ---
+
+@router.get("/{workspace_id}/projects", response_model=list[ProjectResponse])
+async def list_workspace_projects(
+    workspace_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await ProjectService.get_projects_by_workspace(db, current_user, workspace_id)
+
 
 @router.post("/{workspace_id}/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
