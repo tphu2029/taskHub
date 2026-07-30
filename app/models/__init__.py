@@ -3,8 +3,7 @@ from app.models.user import User, UserRole
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
 from app.models.project import Project, ProjectStatus
 from app.models.task import Task, TaskStatus, TaskPriority
-# from app.models.label import Label, TaskLabel
-# from app.models.comment import Comment
+from app.models.label import Label, TaskLabel
 
 __all__ = [
     "Base",
@@ -18,7 +17,6 @@ __all__ = [
     "Task",
     "TaskStatus",
     "TaskPriority",
-    # "Label",
-    # "TaskLabel",
-    # "Comment",
+    "Label",
+    "TaskLabel",
 ]

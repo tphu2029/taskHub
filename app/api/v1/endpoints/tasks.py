@@ -8,6 +8,7 @@ from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.schemas.task import TaskResponse, TaskUpdate
 from app.services.task_service import TaskService
+from app.services.label_service import LabelService
 
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -28,3 +29,23 @@ async def delete_task(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     return await TaskService.delete_task(db, current_user, id)
+
+# --- Label assignment endpoints ---
+
+@router.post("/{id}/labels/{label_id}", response_model=TaskResponse)
+async def assign_label_to_task(
+    id: uuid.UUID,
+    label_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await LabelService.assign_label_to_task(db, current_user, id, label_id)
+
+@router.delete("/{id}/labels/{label_id}", response_model=TaskResponse)
+async def remove_label_from_task(
+    id: uuid.UUID,
+    label_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await LabelService.remove_label_from_task(db, current_user, id, label_id)

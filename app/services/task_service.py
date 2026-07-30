@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.models.project import Project
@@ -15,7 +16,7 @@ from app.core.redis import redis_client
 
 class TaskService:
     @staticmethod
-    async def _check_workspace_membership_for_project(db: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID) -> None:
+    async def _check_workspace_membership_for_project(db: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID) -> Project:
         """Check if user is a member of the workspace that owns the project"""
         project = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one_or_none()
         if not project:
@@ -38,7 +39,9 @@ class TaskService:
     @staticmethod
     async def _check_workspace_membership_for_task(db: AsyncSession, user_id: uuid.UUID, task_id: uuid.UUID) -> Task:
         """Check if user has access to the task and return the task"""
-        task = (await db.execute(select(Task).where(Task.id == task_id))).scalar_one_or_none()
+        task = (await db.execute(
+            select(Task).options(selectinload(Task.labels)).where(Task.id == task_id)
+        )).scalar_one_or_none()
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
         
@@ -70,7 +73,12 @@ class TaskService:
         db.add(new_task)
         await db.commit()
         await db.refresh(new_task)
-        
+
+        # Reload with labels
+        new_task = (await db.execute(
+            select(Task).options(selectinload(Task.labels)).where(Task.id == new_task.id)
+        )).scalar_one()
+
         # Invalidate cache
         await TaskService.invalidate_project_tasks_cache(project_id)
         
@@ -89,7 +97,7 @@ class TaskService:
     ) -> list[Task]:
         await TaskService._check_workspace_membership_for_project(db, current_user.id, project_id)
 
-        stmt = select(Task).where(Task.project_id == project_id)
+        stmt = select(Task).options(selectinload(Task.labels)).where(Task.project_id == project_id)
         
         if task_status:
             stmt = stmt.where(Task.status == task_status)
@@ -114,6 +122,11 @@ class TaskService:
         db.add(task)
         await db.commit()
         await db.refresh(task)
+
+        # Reload with labels
+        task = (await db.execute(
+            select(Task).options(selectinload(Task.labels)).where(Task.id == task.id)
+        )).scalar_one()
         
         # Invalidate cache
         await TaskService.invalidate_project_tasks_cache(task.project_id)

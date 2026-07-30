@@ -1,6 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict, UUID4
 from app.models.task import TaskStatus, TaskPriority
+from app.schemas.label import LabelResponse
 
 
 class TaskBase(BaseModel):
@@ -30,5 +31,6 @@ class TaskResponse(TaskBase):
     project_id: UUID4
     created_by: UUID4
     created_at: datetime
+    labels: list[LabelResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

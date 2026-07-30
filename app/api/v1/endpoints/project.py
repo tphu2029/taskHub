@@ -1,6 +1,5 @@
 import uuid
 import json
-import uuid
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +13,8 @@ from app.schemas.project import ProjectResponse, ProjectUpdate
 from app.services.project_service import ProjectService
 from app.schemas.task import TaskCreate, TaskResponse
 from app.services.task_service import TaskService
+from app.schemas.label import LabelCreate, LabelResponse
+from app.services.label_service import LabelService
 
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -96,3 +97,23 @@ async def create_task(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     return await TaskService.create_task(db, current_user, id, task_in)
+
+# --- Labels endpoints for project ---
+
+@router.post("/{id}/labels", response_model=LabelResponse, status_code=status.HTTP_201_CREATED)
+async def create_label(
+    id: uuid.UUID,
+    label_in: LabelCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await LabelService.create_label(db, current_user, id, label_in)
+
+
+@router.get("/{id}/labels", response_model=list[LabelResponse])
+async def get_labels(
+    id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await LabelService.get_labels_by_project(db, current_user, id)
