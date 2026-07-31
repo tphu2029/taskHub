@@ -8,6 +8,8 @@ from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.schemas.task import TaskResponse, TaskUpdate
 from app.services.task_service import TaskService
+from app.schemas.comment import CommentCreate, CommentResponse
+from app.services.comment_service import CommentService
 from app.services.label_service import LabelService
 
 
@@ -49,3 +51,22 @@ async def remove_label_from_task(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     return await LabelService.remove_label_from_task(db, current_user, id, label_id)
+
+# --- Comment endpoints ---
+
+@router.post("/{id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+async def create_comment(
+    id: uuid.UUID,
+    comment_in: CommentCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await CommentService.create_comment(db, current_user, id, comment_in)
+
+@router.get("/{id}/comments", response_model=list[CommentResponse])
+async def get_comments(
+    id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await CommentService.get_comments_by_task(db, current_user, id)

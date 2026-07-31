@@ -41,3 +41,4 @@ class Task(Base):
     assignee = relationship("User", foreign_keys=[assignee_id])
     creator = relationship("User", foreign_keys=[created_by])
     labels = relationship("Label", secondary="task_labels", back_populates="tasks")
+    comments = relationship("Comment", back_populates="task", cascade="all, delete-orphan")
