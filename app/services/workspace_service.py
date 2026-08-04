@@ -1,4 +1,5 @@
 import uuid
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,7 +108,6 @@ class WorkspaceService:
 
         await db.delete(workspace)
         await db.commit()
-        return None
 
     @staticmethod
     async def add_member(
@@ -195,4 +195,3 @@ class WorkspaceService:
 
         await db.delete(mem)
         await db.commit()
-        return None

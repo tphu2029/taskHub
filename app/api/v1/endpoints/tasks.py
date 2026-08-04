@@ -1,17 +1,18 @@
 import uuid
 from typing import Annotated
-from fastapi import APIRouter, Depends, status
+
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
 from app.models.user import User
-from app.schemas.task import TaskResponse, TaskUpdate
-from app.services.task_service import TaskService
 from app.schemas.comment import CommentCreate, CommentResponse
+from app.schemas.task import TaskResponse, TaskUpdate
 from app.services.comment_service import CommentService
+from app.services.email_service import send_task_assignment_email
 from app.services.label_service import LabelService
-
+from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -21,8 +22,12 @@ async def update_task(
     task_in: TaskUpdate,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ):
-    return await TaskService.update_task(db, current_user, id, task_in)
+    task = await TaskService.update_task(db, current_user, id, task_in)
+    if task_in.assignee_id is not None and task.assignee_id:
+        background_tasks.add_task(send_task_assignment_email, task.assignee_id, task.title, db)
+    return task
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(

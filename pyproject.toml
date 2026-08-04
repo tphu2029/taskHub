@@ -37,6 +37,9 @@ dev = [
 line-length = 88
 target-version = "py312"
 
+[tool.ruff.lint]
+ignore = ["B008", "BLE001", "S110"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]

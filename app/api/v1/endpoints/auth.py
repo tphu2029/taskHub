@@ -1,4 +1,5 @@
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.schemas.auth import (
-    LoginRequest,
     LogoutRequest,
     RefreshTokenRequest,
     RegisterRequest,
@@ -27,6 +27,7 @@ async def register(
 
 
 from fastapi.security import OAuth2PasswordRequestForm
+
 
 @router.post("/login", response_model=TokenResponse)
 async def login(

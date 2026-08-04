@@ -1,6 +1,8 @@
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict, UUID4
-from app.models.task import TaskStatus, TaskPriority
+
+from pydantic import UUID4, BaseModel, ConfigDict, Field
+
+from app.models.task import TaskPriority, TaskStatus
 from app.schemas.label import LabelResponse
 
 
