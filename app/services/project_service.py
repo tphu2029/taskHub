@@ -1,10 +1,11 @@
 import uuid
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.project import Project, ProjectStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.workspace import WorkspaceMember, WorkspaceRole
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
@@ -12,26 +13,26 @@ from app.schemas.project import ProjectCreate, ProjectUpdate
 class ProjectService:
     @staticmethod
     async def create_project(db: AsyncSession, current_user: User, workspace_id: uuid.UUID, project_in: ProjectCreate) -> Project:
-        # Check if user is a member of the workspace
-        stmt = select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == current_user.id
-        )
-        result = await db.execute(stmt)
-        member = result.scalar_one_or_none()
+        if current_user.role != UserRole.ADMIN:
+            stmt = select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == current_user.id
+            )
+            result = await db.execute(stmt)
+            member = result.scalar_one_or_none()
 
-        if not member:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found or you are not a member",
-            )
-        
-        # Only OWNER and EDITOR can create projects
-        if member.role not in [WorkspaceRole.OWNER, WorkspaceRole.EDITOR]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only workspace OWNER or EDITOR can create projects",
-            )
+            if not member:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Workspace not found or you are not a member",
+                )
+            
+            # Only OWNER and EDITOR can create projects
+            if member.role not in [WorkspaceRole.OWNER, WorkspaceRole.EDITOR]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only workspace OWNER or EDITOR can create projects",
+                )
 
         new_project = Project(
             workspace_id=workspace_id,
@@ -45,13 +46,12 @@ class ProjectService:
 
     @staticmethod
     async def get_projects_by_workspace(db: AsyncSession, current_user: User, workspace_id: uuid.UUID) -> list[Project]:
-        # Check membership
-        stmt = select(WorkspaceMember).where(
+        mem_stmt = select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
             WorkspaceMember.user_id == current_user.id
         )
-        result = await db.execute(stmt)
-        member = result.scalar_one_or_none()
+        mem_result = await db.execute(mem_stmt)
+        member = mem_result.scalar_one_or_none()
 
         if not member:
             raise HTTPException(
@@ -60,8 +60,8 @@ class ProjectService:
             )
             
         proj_stmt = select(Project).where(Project.workspace_id == workspace_id)
-        result = await db.execute(proj_stmt)
-        return list(result.scalars().all())
+        proj_result = await db.execute(proj_stmt)
+        return list(proj_result.scalars().all())
 
     @staticmethod
     async def get_project(db: AsyncSession, current_user: User, project_id: uuid.UUID) -> Project:
@@ -161,4 +161,3 @@ class ProjectService:
 
         await db.delete(project)
         await db.commit()
-        return None

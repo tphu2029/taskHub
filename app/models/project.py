@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
 import enum
 import uuid
-from sqlalchemy import String, Text, DateTime, ForeignKey, Enum, Uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -23,7 +24,7 @@ class Project(Base):
         Enum(ProjectStatus), default=ProjectStatus.ACTIVE, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
     workspace = relationship("Workspace", back_populates="projects")

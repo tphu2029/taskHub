@@ -1,7 +1,8 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, UUID4
+
+from pydantic import UUID4, BaseModel, ConfigDict, Field
+
 from app.models.workspace import WorkspaceRole
-from app.schemas.user import UserResponse
 
 
 class WorkspaceCreate(BaseModel):
@@ -21,9 +22,13 @@ class WorkspaceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+from pydantic import UUID4, AliasChoices, BaseModel, ConfigDict, Field
+
+
 class WorkspaceMemberAdd(BaseModel):
-    user_id: UUID4
+    user_id: UUID4 = Field(validation_alias=AliasChoices("userId", "user_id"), serialization_alias="userId")
     role: WorkspaceRole = WorkspaceRole.VIEWER
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class WorkspaceMemberResponse(BaseModel):

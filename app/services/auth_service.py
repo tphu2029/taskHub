@@ -1,4 +1,5 @@
 import uuid
+
 from fastapi import HTTPException, status
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -14,7 +15,6 @@ from app.core.security import (
 )
 from app.models.user import User, UserRole
 from app.schemas.auth import (
-    LoginRequest,
     LogoutRequest,
     RefreshTokenRequest,
     RegisterRequest,
@@ -65,7 +65,7 @@ class AuthService:
 
         access_token = create_access_token(subject=user.id)
         refresh_token = create_refresh_token(subject=user.id)
-        return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+        return TokenResponse(accessToken=access_token, refreshToken=refresh_token)
 
     @staticmethod
     async def refresh_token(
@@ -81,7 +81,7 @@ class AuthService:
                 )
         except HTTPException:
             raise
-        except Exception:
+        except Exception:  
             pass
 
         payload = decode_token(token)
@@ -108,10 +108,10 @@ class AuthService:
         try:
             ttl = settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400
             await redis_conn.setex(f"blacklist:{token}", ttl, "revoked")
-        except Exception:
+        except Exception:  
             pass
 
-        return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token)
+        return TokenResponse(accessToken=new_access_token, refreshToken=new_refresh_token)
 
     @staticmethod
     async def logout(redis_conn: Redis, logout_in: LogoutRequest) -> dict[str, str]:
@@ -127,7 +127,7 @@ class AuthService:
         try:
             ttl = settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400
             await redis_conn.setex(f"blacklist:{token}", ttl, "revoked")
-        except Exception:
+        except Exception: 
             pass
 
         return {"message": "Successfully logged out"}

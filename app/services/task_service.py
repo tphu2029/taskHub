@@ -1,31 +1,35 @@
-import json
 import uuid
-from typing import Optional
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.task import Task, TaskStatus, TaskPriority
-from app.models.project import Project
-from app.models.user import User
-from app.models.workspace import WorkspaceMember
-from app.schemas.task import TaskCreate, TaskUpdate
 from app.core.redis import redis_client
+from app.models.project import Project
+from app.models.task import Task, TaskPriority, TaskStatus
+from app.models.user import User, UserRole
+from app.models.workspace import WorkspaceMember, WorkspaceRole
+from app.schemas.task import TaskCreate, TaskUpdate
 
 
 class TaskService:
     @staticmethod
-    async def _check_workspace_membership_for_project(db: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID) -> Project:
-        """Check if user is a member of the workspace that owns the project"""
+    async def _check_workspace_membership_for_project(
+        db: AsyncSession, current_user: User, project_id: uuid.UUID, min_role: WorkspaceRole | None = None
+    ) -> Project:
+        """Check if user is a member of the workspace that owns the project with required role"""
         project = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one_or_none()
         if not project:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
+        if current_user.role == UserRole.ADMIN:
+            return project
+
         member = (await db.execute(
             select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == project.workspace_id,
-                WorkspaceMember.user_id == user_id
+                WorkspaceMember.user_id == current_user.id
             )
         )).scalar_one_or_none()
 
@@ -34,10 +38,19 @@ class TaskService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions in the workspace for this project"
             )
+
+        if min_role == WorkspaceRole.EDITOR and member.role not in [WorkspaceRole.OWNER, WorkspaceRole.EDITOR]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="VIEWER role does not have permission to modify tasks"
+            )
+
         return project
 
     @staticmethod
-    async def _check_workspace_membership_for_task(db: AsyncSession, user_id: uuid.UUID, task_id: uuid.UUID) -> Task:
+    async def _check_workspace_membership_for_task(
+        db: AsyncSession, current_user: User, task_id: uuid.UUID, min_role: WorkspaceRole | None = None
+    ) -> Task:
         """Check if user has access to the task and return the task"""
         task = (await db.execute(
             select(Task).options(selectinload(Task.labels)).where(Task.id == task_id)
@@ -45,7 +58,7 @@ class TaskService:
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
         
-        await TaskService._check_workspace_membership_for_project(db, user_id, task.project_id)
+        await TaskService._check_workspace_membership_for_project(db, current_user, task.project_id, min_role=min_role)
         return task
 
     @staticmethod
@@ -58,7 +71,9 @@ class TaskService:
 
     @staticmethod
     async def create_task(db: AsyncSession, current_user: User, project_id: uuid.UUID, task_in: TaskCreate) -> Task:
-        await TaskService._check_workspace_membership_for_project(db, current_user.id, project_id)
+        await TaskService._check_workspace_membership_for_project(
+            db, current_user, project_id, min_role=WorkspaceRole.EDITOR
+        )
 
         new_task = Task(
             project_id=project_id,
@@ -89,23 +104,24 @@ class TaskService:
         db: AsyncSession, 
         current_user: User, 
         project_id: uuid.UUID,
-        skip: int = 0,
-        limit: int = 100,
-        task_status: Optional[TaskStatus] = None,
-        priority: Optional[TaskPriority] = None,
-        assignee_id: Optional[uuid.UUID] = None
+        page: int = 1,
+        limit: int = 10,
+        status_filter: TaskStatus | None = None,
+        priority: TaskPriority | None = None,
+        assignee_id: uuid.UUID | None = None
     ) -> list[Task]:
-        await TaskService._check_workspace_membership_for_project(db, current_user.id, project_id)
+        await TaskService._check_workspace_membership_for_project(db, current_user, project_id)
 
         stmt = select(Task).options(selectinload(Task.labels)).where(Task.project_id == project_id)
         
-        if task_status:
-            stmt = stmt.where(Task.status == task_status)
+        if status_filter:
+            stmt = stmt.where(Task.status == status_filter)
         if priority:
             stmt = stmt.where(Task.priority == priority)
         if assignee_id:
             stmt = stmt.where(Task.assignee_id == assignee_id)
             
+        skip = (page - 1) * limit
         stmt = stmt.offset(skip).limit(limit)
         
         result = await db.execute(stmt)
@@ -113,7 +129,9 @@ class TaskService:
 
     @staticmethod
     async def update_task(db: AsyncSession, current_user: User, task_id: uuid.UUID, task_in: TaskUpdate) -> Task:
-        task = await TaskService._check_workspace_membership_for_task(db, current_user.id, task_id)
+        task = await TaskService._check_workspace_membership_for_task(
+            db, current_user, task_id, min_role=WorkspaceRole.EDITOR
+        )
         
         update_data = task_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -135,7 +153,9 @@ class TaskService:
 
     @staticmethod
     async def delete_task(db: AsyncSession, current_user: User, task_id: uuid.UUID) -> None:
-        task = await TaskService._check_workspace_membership_for_task(db, current_user.id, task_id)
+        task = await TaskService._check_workspace_membership_for_task(
+            db, current_user, task_id, min_role=WorkspaceRole.EDITOR
+        )
         
         project_id = task.project_id
         await db.delete(task)
@@ -143,4 +163,3 @@ class TaskService:
         
         # Invalidate cache
         await TaskService.invalidate_project_tasks_cache(project_id)
-        return None

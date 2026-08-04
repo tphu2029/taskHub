@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
 import uuid
-from sqlalchemy import Text, DateTime, ForeignKey, Uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import DateTime, ForeignKey, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -14,7 +15,7 @@ class Comment(Base):
     author_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
     task = relationship("Task", back_populates="comments")

@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
 import enum
 import uuid
-from sqlalchemy import String, Boolean, DateTime, Enum, Uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, DateTime, Enum, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -22,7 +23,7 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.MEMBER, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
     owned_workspaces = relationship("Workspace", back_populates="owner", cascade="all, delete-orphan")

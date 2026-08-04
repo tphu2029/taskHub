@@ -1,5 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, UUID4
+
+from pydantic import UUID4, BaseModel, ConfigDict, Field
 
 
 class CommentCreate(BaseModel):

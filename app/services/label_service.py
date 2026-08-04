@@ -1,29 +1,35 @@
 import uuid
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.label import Label
-from app.models.task import Task
 from app.models.project import Project
-from app.models.user import User
-from app.models.workspace import WorkspaceMember
+from app.models.task import Task
+from app.models.user import User, UserRole
+from app.models.workspace import WorkspaceMember, WorkspaceRole
 from app.schemas.label import LabelCreate, LabelUpdate
 from app.services.task_service import TaskService
 
 
 class LabelService:
     @staticmethod
-    async def _check_workspace_membership_for_project(db: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID) -> Project:
+    async def _check_workspace_membership_for_project(
+        db: AsyncSession, current_user: User, project_id: uuid.UUID, min_role: WorkspaceRole | None = None
+    ) -> Project:
         project = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one_or_none()
         if not project:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
+        if current_user.role == UserRole.ADMIN:
+            return project
+
         member = (await db.execute(
             select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == project.workspace_id,
-                WorkspaceMember.user_id == user_id
+                WorkspaceMember.user_id == current_user.id
             )
         )).scalar_one_or_none()
 
@@ -32,11 +38,20 @@ class LabelService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not enough permissions in the workspace for this project"
             )
+
+        if min_role == WorkspaceRole.EDITOR and member.role not in [WorkspaceRole.OWNER, WorkspaceRole.EDITOR]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="VIEWER role does not have permission to modify labels"
+            )
+
         return project
 
     @staticmethod
     async def create_label(db: AsyncSession, current_user: User, project_id: uuid.UUID, label_in: LabelCreate) -> Label:
-        await LabelService._check_workspace_membership_for_project(db, current_user.id, project_id)
+        await LabelService._check_workspace_membership_for_project(
+            db, current_user, project_id, min_role=WorkspaceRole.EDITOR
+        )
 
         new_label = Label(
             project_id=project_id,
@@ -50,7 +65,7 @@ class LabelService:
 
     @staticmethod
     async def get_labels_by_project(db: AsyncSession, current_user: User, project_id: uuid.UUID) -> list[Label]:
-        await LabelService._check_workspace_membership_for_project(db, current_user.id, project_id)
+        await LabelService._check_workspace_membership_for_project(db, current_user, project_id)
 
         stmt = select(Label).where(Label.project_id == project_id)
         result = await db.execute(stmt)
@@ -62,7 +77,9 @@ class LabelService:
         if not label:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found")
 
-        await LabelService._check_workspace_membership_for_project(db, current_user.id, label.project_id)
+        await LabelService._check_workspace_membership_for_project(
+            db, current_user, label.project_id, min_role=WorkspaceRole.EDITOR
+        )
 
         update_data = label_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -82,13 +99,14 @@ class LabelService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found")
 
         project_id = label.project_id
-        await LabelService._check_workspace_membership_for_project(db, current_user.id, project_id)
+        await LabelService._check_workspace_membership_for_project(
+            db, current_user, project_id, min_role=WorkspaceRole.EDITOR
+        )
 
         await db.delete(label)
         await db.commit()
 
         await TaskService.invalidate_project_tasks_cache(project_id)
-        return None
 
     @staticmethod
     async def assign_label_to_task(db: AsyncSession, current_user: User, task_id: uuid.UUID, label_id: uuid.UUID) -> Task:
@@ -98,7 +116,9 @@ class LabelService:
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-        await LabelService._check_workspace_membership_for_project(db, current_user.id, task.project_id)
+        await LabelService._check_workspace_membership_for_project(
+            db, current_user, task.project_id, min_role=WorkspaceRole.EDITOR
+        )
 
         label = (await db.execute(select(Label).where(Label.id == label_id))).scalar_one_or_none()
         if not label:
@@ -127,7 +147,9 @@ class LabelService:
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-        await LabelService._check_workspace_membership_for_project(db, current_user.id, task.project_id)
+        await LabelService._check_workspace_membership_for_project(
+            db, current_user, task.project_id, min_role=WorkspaceRole.EDITOR
+        )
 
         label = (await db.execute(select(Label).where(Label.id == label_id))).scalar_one_or_none()
         if not label:
